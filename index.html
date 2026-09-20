@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Time Tracker</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        background: #f3f6fa;
+        margin: 0;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1000px;
+        margin: auto;
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+      }
+
+      h1 {
+        text-align: center;
+        color: #1f2937;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+
+      th {
+        background: #2563eb;
+        color: white;
+        padding: 12px;
+        font-size: 14px;
+      }
+
+      td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: center;
+      }
+
+      tr:nth-child(even) {
+        background: #f9fafb;
+      }
+
+      input[type="time"],
+      select {
+        padding: 7px;
+        border: 1px solid #bbb;
+        border-radius: 5px;
+        width: 100%;
+      }
+
+      select {
+        cursor: pointer;
+      }
+
+      .summary {
+        margin-top: 25px;
+        background: #eff6ff;
+        padding: 20px;
+        border-radius: 10px;
+        font-size: 17px;
+        line-height: 2;
+      }
+
+      .positive {
+        color: #16a34a;
+        font-weight: bold;
+      }
+
+      .negative {
+        color: #dc2626;
+        font-weight: bold;
+      }
+
+      .leave {
+        color: #2563eb;
+        font-weight: bold;
+      }
+
+      .target {
+        color: #7c3aed;
+        font-weight: bold;
+      }
+
+      button {
+        margin-top: 20px;
+        padding: 12px 25px;
+        border: none;
+        border-radius: 6px;
+        background: #dc2626;
+        color: white;
+        font-size: 15px;
+        cursor: pointer;
+      }
+
+      .reset-btn {
+        margin-top: 0;
+        padding: 5px 10px;
+        background: #6b7280;
+        font-size: 12px;
+      }
+
+      .reset-btn:hover {
+        background: #4b5563;
+      }
+
+      input:disabled {
+        opacity: 1;
+        background-color: #e5e7eb;
+        color: #6b7280;
+      }
+
+      button:hover {
+        background: #b91c1c;
+      }
+
+      @media (max-width: 700px) {
+        table {
+          font-size: 12px;
+        }
+
+        th,
+        td {
+          padding: 6px;
+        }
+
+        input[type="time"],
+        select {
+          font-size: 12px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Time Tracker</h1>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Status</th>
+            <th>In Time</th>
+            <th>Out Time</th>
+            <th>Worked</th>
+            <th>Daily Result</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody id="workTable"></tbody>
+      </table>
+
+      <div class="summary">
+        <div>
+          <b>Leave Days:</b>
+          <span id="leaveDays"> 0 </span>
+        </div>
+
+        <div>
+          <b>Weekly Target:</b>
+          <span class="target" id="weeklyTarget"> 45h 0m </span>
+        </div>
+
+        <div>
+          <b>Total Worked:</b>
+          <span id="totalWorked"> 0h 0m </span>
+        </div>
+
+        <div>
+          <b>Weekly Balance:</b>
+          <span id="weeklyBalance"> 0h 0m </span>
+        </div>
+
+        <div>
+          <b>Carry Forward Balance:</b>
+          <span id="carryBalance"> 0h 0m </span>
+        </div>
+
+        <div>
+          <b>Today's Suggested Out (after balance off):</b>
+          <span class="target" id="todaySuggestedOut">-</span>
+        </div>
+
+        <div>
+          <b>Today's Clock In:</b>
+          <span class="target" id="timeSinceIn">-</span>
+        </div>
+      </div>
+
+      <button onclick="clearWeek()">Clear Week</button>
+
+      <script>
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        const DAILY_TARGET = 9 * 60;
+        const WEEKLY_TARGET = 45 * 60;
+        const table = document.getElementById("workTable");
+
+        // Create table rows
+        days.forEach((day, index) => {
+          let row = document.createElement("tr");
+
+          row.innerHTML = `
+          <td>
+            ${day}
+          </td>
+
+          <td>
+            <select id="type${index}" onchange="changeStatus(${index})">
+              <option value="Working">
+                Working
+              </option>
+
+              <option value="Leave">
+                Leave
+              </option> 
+            </select>
+          </td>
+
+          <td>
+            <input 
+            type="time"
+            id="in${index}"
+            onchange="updateSuggestedOut(${index});saveData();calculate();"
+            > 
+          </td>
+
+          <td>
+            <input 
+            type="time"
+            id="out${index}"
+            onchange="updateSuggestedOut(${index});saveData();calculate();"
+            >
+
+            <small 
+            id="suggested${index}" 
+            style="display:block;color:#9ca3af;">
+            </small>
+          </td>
+
+          <td id="worked${index}">
+            -
+          </td>
+
+          <td id="result${index}">
+            -
+          </td>
+
+          <td>
+            <button class="reset-btn" onclick="resetDay(${index})">Reset</button>
+          </td>
+          `;
+
+          table.appendChild(row);
+        });
+
+        // Enable disable time input for leave
+        function changeStatus(index) {
+          let status = document.getElementById("type" + index).value;
+          let inBox = document.getElementById("in" + index);
+          let outBox = document.getElementById("out" + index);
+
+          if (status === "Leave") {
+            inBox.value = "";
+            outBox.value = "";
+            inBox.disabled = true;
+            outBox.disabled = true;
+
+            document.getElementById("suggested" + index).innerHTML = "";
+          } else {
+            inBox.disabled = false;
+            outBox.disabled = false;
+          }
+
+          saveData();
+          calculate();
+        }
+
+        // Reset individual day
+        function resetDay(index) {
+          document.getElementById("type" + index).value = "Working";
+          let inBox = document.getElementById("in" + index);
+          let outBox = document.getElementById("out" + index);
+
+          inBox.value = "";
+          outBox.value = "";
+          inBox.disabled = false;
+          outBox.disabled = false;
+
+          document.getElementById("suggested" + index).innerHTML = "";
+
+          saveData();
+          calculate();
+        }
+
+        // Convert time to minutes
+        function convertToMinutes(time) {
+          if (!time) {
+            return null;
+          }
+
+          let parts = time.split(":");
+
+          return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+        }
+
+        // Convert minutes to hours minutes
+        function formatTime(minutes) {
+          let hours = Math.floor(minutes / 60);
+
+          let mins = minutes % 60;
+
+          return hours + "h " + mins + "m";
+        }
+
+        // Convert minutes to decimal hours
+        function formatDecimalHours(minutes) {
+          return (minutes / 60).toFixed(2) + " hrs";
+        }
+
+        // Showing live time with seconds
+        function formatTimeWithSeconds(totalSeconds) {
+          let hours = Math.floor(totalSeconds / 3600);
+          let minutes = Math.floor((totalSeconds % 3600) / 60);
+          let seconds = totalSeconds % 60;
+          return `${hours}h ${minutes}m ${seconds}s`;
+        }
+
+        // Calculate hours
+        function calculate() {
+          let totalWorked = 0;
+          let leaveCount = 0;
+          let adjustmentBalance = 0;
+
+          days.forEach((day, index) => {
+            let type = document.getElementById("type" + index).value;
+            let workedCell = document.getElementById("worked" + index);
+            let resultCell = document.getElementById("result" + index);
+
+            // Leave handling
+            if (type === "Leave") {
+              leaveCount++;
+              workedCell.innerHTML = "Leave";
+              resultCell.innerHTML = "<span class='leave'>Leave</span>";
+              return;
+            }
+
+            let inTime = document.getElementById("in" + index).value;
+            let outTime = document.getElementById("out" + index).value;
+
+            if (inTime && outTime) {
+              let start = convertToMinutes(inTime);
+              let end = convertToMinutes(outTime);
+
+              if (end < start) {
+                end += 1440;
+              }
+
+              let worked = end - start;
+              totalWorked += worked;
+              workedCell.innerHTML = formatTime(worked);
+              let difference = worked - DAILY_TARGET;
+              // Running carry-forward balance
+              adjustmentBalance += difference;
+
+              if (difference > 0) {
+                resultCell.innerHTML =
+                  "<span class='positive'>+" +
+                  formatTime(difference) +
+                  "</span>";
+              } else if (difference < 0) {
+                resultCell.innerHTML =
+                  "<span class='negative'>-" +
+                  formatTime(Math.abs(difference)) +
+                  "</span>";
+              } else {
+                resultCell.innerHTML = "<span class='positive'>0h 0m</span>";
+              }
+            } else {
+              workedCell.innerHTML = "-";
+              resultCell.innerHTML = "-";
+            }
+          });
+
+          // Weekly target after leave
+          let weeklyTarget = WEEKLY_TARGET - leaveCount * DAILY_TARGET;
+
+          if (weeklyTarget < 0) {
+            weeklyTarget = 0;
+          }
+
+          document.getElementById("leaveDays").innerHTML = leaveCount;
+          document.getElementById("weeklyTarget").innerHTML =
+            formatTime(weeklyTarget);
+          document.getElementById("totalWorked").innerHTML =
+            `${formatTime(totalWorked)} (${formatDecimalHours(totalWorked)})`
+
+          // Weekly balance
+          let weeklyDifference = totalWorked - weeklyTarget;
+          let weeklyBox = document.getElementById("weeklyBalance");
+
+          if (weeklyDifference > 0) {
+            weeklyBox.innerHTML =
+              "<span class='positive'>+" +
+              formatTime(weeklyDifference) +
+              "</span>";
+          } else if (weeklyDifference < 0) {
+            weeklyBox.innerHTML =
+              "<span class='negative'>-" +
+              formatTime(Math.abs(weeklyDifference)) +
+              "</span>";
+          } else {
+            weeklyBox.innerHTML = "<span class='positive'>0h 0m</span>";
+          }
+
+          // Carry forward balance
+          let carryBox = document.getElementById("carryBalance");
+
+          if (adjustmentBalance > 0) {
+            carryBox.innerHTML =
+              "<span class='positive'>+" +
+              formatTime(adjustmentBalance) +
+              "</span>";
+          } else if (adjustmentBalance < 0) {
+            carryBox.innerHTML =
+              "<span class='negative'>-" +
+              formatTime(Math.abs(adjustmentBalance)) +
+              "</span>";
+          } else {
+            carryBox.innerHTML = "0h 0m";
+          }
+
+          calculateTodaySuggestedOut();
+          updateTimeSinceIn();
+        }
+
+        // Calculate todays suggested out time
+        function calculateTodaySuggestedOut() {
+          // Current day (JS: Sun=0, Mon=1, ..., Fri=5)
+          const today = new Date().getDay();
+          const todayIndex = today - 1;
+
+          // Only Monday-Friday
+          if (todayIndex < 0 || todayIndex >= days.length) {
+            document.getElementById("todaySuggestedOut").innerHTML = "-";
+            return;
+          }
+
+          let balance = 0;
+
+          // Calculate balance from completed days BEFORE today only
+          for (let index = 0; index < todayIndex; index++) {
+            const type = document.getElementById("type" + index).value;
+
+            if (type !== "Working") {
+              continue;
+            }
+
+            const inTime = document.getElementById("in" + index).value;
+            const outTime = document.getElementById("out" + index).value;
+
+            if (!inTime || !outTime) {
+              continue;
+            }
+
+            let start = convertToMinutes(inTime);
+            let end = convertToMinutes(outTime);
+
+            if (end < start) {
+              end += 1440;
+            }
+
+            balance += end - start - DAILY_TARGET;
+          }
+
+          // Today's in time
+          const inTime = document.getElementById("in" + todayIndex).value;
+
+          if (!inTime) {
+            document.getElementById("todaySuggestedOut").innerHTML = "-";
+            return;
+          }
+
+          // Required work today after adjusting previous balance
+          let requiredTime = DAILY_TARGET - balance;
+
+          // If previous surplus already covers today's target
+          if (requiredTime < 0) {
+            requiredTime = 0;
+          }
+
+          let outMinutes = convertToMinutes(inTime) + requiredTime;
+
+          if (outMinutes >= 1440) {
+            outMinutes -= 1440;
+          }
+
+          const hours = Math.floor(outMinutes / 60);
+          const mins = outMinutes % 60;
+
+          const result = new Date(0, 0, 0, hours, mins);
+
+          document.getElementById("todaySuggestedOut").innerHTML =
+            result.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            });
+        }
+
+        // Save data
+        function saveData() {
+          let data = [];
+
+          days.forEach((day, index) => {
+            data.push({
+              type: document.getElementById("type" + index).value,
+
+              inTime: document.getElementById("in" + index).value,
+
+              outTime: document.getElementById("out" + index).value,
+            });
+          });
+
+          localStorage.setItem("workTimeTracker", JSON.stringify(data));
+        }
+
+        // Load saved data
+        function loadData() {
+          let saved = localStorage.getItem("workTimeTracker");
+
+          if (!saved) {
+            calculate();
+
+            return;
+          }
+
+          let data = JSON.parse(saved);
+
+          data.forEach((item, index) => {
+            document.getElementById("type" + index).value = item.type;
+
+            document.getElementById("in" + index).value = item.inTime;
+
+            document.getElementById("out" + index).value = item.outTime;
+
+            if (item.inTime) {
+              updateSuggestedOut(index);
+            }
+
+            changeStatus(index);
+          });
+          calculate();
+        }
+
+        // Clear week
+        function clearWeek() {
+          let confirmClear = confirm(
+            "Are you sure you want to clear this week's data?",
+          );
+
+          if (confirmClear) {
+            localStorage.removeItem("workTimeTracker");
+
+            location.reload();
+          }
+        }
+
+        // Suggest out time
+        function updateSuggestedOut(index) {
+          let inTime = document.getElementById("in" + index).value;
+
+          let suggestedBox = document.getElementById("suggested" + index);
+
+          if (!inTime) {
+            suggestedBox.innerHTML = "";
+            return;
+          }
+
+          let minutes = convertToMinutes(inTime);
+
+          minutes += DAILY_TARGET;
+
+          if (minutes >= 1440) {
+            minutes -= 1440;
+          }
+
+          let hours = Math.floor(minutes / 60);
+          let mins = minutes % 60;
+
+          let time = new Date(0, 0, 0, hours, mins);
+
+          suggestedBox.innerHTML =
+            "Suggested (9 hrs): " +
+            time.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            });
+        }
+
+        // Clock in time update-time function
+        function updateTimeSinceIn() {
+          const box = document.getElementById("timeSinceIn");
+
+          const todayIndex = new Date().getDay() - 1;
+
+          if (todayIndex < 0 || todayIndex >= days.length) {
+            box.innerHTML = "-";
+            return;
+          }
+
+          const type = document.getElementById("type" + todayIndex).value;
+
+          if (type === "Leave") {
+            box.innerHTML = "Leave";
+            return;
+          }
+
+          const inValue = document.getElementById("in" + todayIndex).value;
+
+          if (!inValue) {
+            box.innerHTML = "-";
+            return;
+          }
+
+          let [hours, minutes] = inValue.split(":");
+
+          let start = new Date();
+
+          start.setHours(hours);
+          start.setMinutes(minutes);
+          start.setSeconds(0);
+
+          let end;
+
+          const outValue = document.getElementById("out" + todayIndex).value;
+
+          if (outValue) {
+            let [outHours, outMinutes] = outValue.split(":");
+
+            end = new Date();
+
+            end.setHours(outHours);
+            end.setMinutes(outMinutes);
+            end.setSeconds(0);
+          } else {
+            end = new Date();
+          }
+
+          let seconds = Math.floor((end - start) / 1000);
+
+          if (seconds < 0) {
+            seconds += 86400;
+          }
+
+          box.innerHTML = formatTimeWithSeconds(seconds);
+        }
+
+        // Load on startup
+        window.onload = function () {
+          loadData();
+          updateTimeSinceIn();
+          setInterval(updateTimeSinceIn, 1000); // live updates every second
+        };
+      </script>
+    </div>
+  </body>
+</html>
